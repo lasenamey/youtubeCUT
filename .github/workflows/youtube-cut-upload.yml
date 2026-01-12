@@ -63,5 +63,5 @@ jobs:
 
       - name: Upload to Google Drive
         run: |
-          rclone copy cuts gdrive:${{ github.event.inputs.drive_folder }} \
+          rclone copy cuts lasenameygd:${{ github.event.inputs.drive_folder }} \
             --progress
