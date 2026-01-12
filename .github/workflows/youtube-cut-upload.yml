@@ -1,20 +1,20 @@
-name: YouTube Cut & Upload to Google Drive
+name: Direct Video Cut & Upload to Google Drive
 
 on:
   workflow_dispatch:
     inputs:
-      youtube_url:
-        description: "YouTube URL"
+      video_url:
+        description: "Direct video URL (mp4/mkv/webm/m3u8)"
         required: true
         type: string
       time_ranges:
-        description: "Time ranges (HH:MM:SS - HH:MM:SS, multiple separated by comma)"
+        description: "HH:MM:SS - HH:MM:SS, multiple separated by comma"
         required: true
         type: string
       drive_folder:
-        description: "Google Drive folder path (optional)"
+        description: "Google Drive folder"
         required: false
-        default: "youtube_cuts"
+        default: "video_cuts"
         type: string
 
 jobs:
@@ -22,14 +22,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg python3-pip
-          pip3 install yt-dlp
+          sudo apt-get install -y ffmpeg curl
 
       - name: Setup rclone
         run: |
@@ -38,15 +34,11 @@ jobs:
         env:
           RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
 
-      - name: Download YouTube video (best quality)
+      - name: Download direct video
         run: |
-          yt-dlp \
-            -f "bv*+ba/b" \
-            --merge-output-format mp4 \
-            -o "source.%(ext)s" \
-            "${{ github.event.inputs.youtube_url }}"
+          curl -L "${{ github.event.inputs.video_url }}" -o source.mp4
 
-      - name: Cut video into segments (named by time)
+      - name: Cut video (filename based on time)
         run: |
           mkdir -p cuts
           IFS=',' read -ra SEGMENTS <<< "${{ github.event.inputs.time_ranges }}"
@@ -60,8 +52,7 @@ jobs:
 
             OUTPUT="cuts/clip_${SAFE_START}_to_${SAFE_END}.mp4"
 
-            echo "Cutting $START -> $END as $OUTPUT"
-
+            echo "Cutting $START -> $END"
             ffmpeg -y \
               -i source.mp4 \
               -ss "$START" \
@@ -70,9 +61,7 @@ jobs:
               "$OUTPUT"
           done
 
-
-      - name: Upload clips to Google Drive
+      - name: Upload to Google Drive
         run: |
-          rclone copy cuts divagd:${{ github.event.inputs.drive_folder }} \
-            --progress \
-            --create-empty-src-dirs
+          rclone copy cuts gdrive:${{ github.event.inputs.drive_folder }} \
+            --progress
